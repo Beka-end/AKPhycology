@@ -1,0 +1,30 @@
+# Зависимости
+node_modules/
+
+# Секреты и окружение
+.env
+.env.local
+.env.*.local
+
+# База данных и её служебные файлы / бэкапы
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+screening.db*
+backups/
+
+# Логи
+*.log
+npm-debug.log*
+
+# ОС и редакторы
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# Прочее
+dist/
+tmp/
