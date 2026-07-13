@@ -9,8 +9,11 @@
 const express = require('express');
 const XLSX = require('xlsx');
 const crypto = require('crypto');
+const path = require('path');
 try { require('dotenv').config(); } catch (_) {}
 const { client, ensureSchema } = require('./db');
+
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'almaty-clinic';
 // Токен стабилен между запусками: берём из env либо детерминированно из пароля
@@ -27,8 +30,9 @@ const L = k => LABEL[k] || (k || '');
 const app = express();
 app.use(express.json({ limit: '256kb' }));
 
-// Перед любым API-запросом убеждаемся, что таблица существует (идемпотентно)
-app.use(async (_req, res, next) => {
+// Перед API-запросами убеждаемся, что таблица существует (идемпотентно).
+// На отдачу самой страницы это не влияет — фронтенд откроется в любом случае.
+app.use('/api', async (_req, res, next) => {
   try { await ensureSchema(); next(); }
   catch (e) { console.error('DB init error:', e); res.status(500).json({ error: 'db_init' }); }
 });
@@ -125,11 +129,14 @@ app.get('/api/export.xlsx', auth, async (_req, res) => {
   } catch (e) { console.error('export error:', e); res.status(500).json({ error: 'export_failed' }); }
 });
 
-// Локальный запуск: раздаём фронтенд и слушаем порт.
-// На Vercel этот блок не выполняется (статику отдаёт платформа).
+// Раздача фронтенда через это же приложение — и локально, и на Vercel.
+// (index.html и статика лежат в public/; на Vercel папка включается в бандл
+//  функции через includeFiles в vercel.json.)
+app.use(express.static(PUBLIC_DIR));
+app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
+
+// Локальный запуск: слушаем порт. На Vercel этот блок не выполняется.
 if (require.main === module) {
-  const path = require('path');
-  app.use(express.static(path.join(__dirname, 'public')));
   const PORT = process.env.PORT || 3000;
   ensureSchema()
     .then(() => app.listen(PORT, () => console.log('Almaty Clinic → http://localhost:' + PORT)))
