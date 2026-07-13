@@ -1,23 +1,27 @@
 'use strict';
 /**
- * Слой базы данных на libSQL / Turso.
+ * Слой базы данных на libSQL / Turso — через HTTP-клиент (@libsql/client/web).
  *
- *  - На Vercel (и любом serverless) задайте переменные окружения:
- *      TURSO_DATABASE_URL = libsql://<...>.turso.io
- *      TURSO_AUTH_TOKEN   = <токен>
- *    Тогда данные хранятся в облаке Turso и не теряются между запросами.
+ * HTTP-клиент не использует нативных модулей и предназначен для serverless
+ * (Vercel, Edge и т.п.), поэтому функция не падает при холодном старте.
  *
- *  - Локально, если переменные не заданы, используется файл ./screening.db
- *    (для разработки и запуска на обычном сервере с постоянным диском).
+ * Требуются переменные окружения:
+ *   TURSO_DATABASE_URL = libsql://<...>.turso.io   (или https://<...>.turso.io)
+ *   TURSO_AUTH_TOKEN   = <токен>
+ *
+ * Если переменные не заданы — используется заглушка: страница откроется,
+ * а запросы к /api вернут понятную ошибку (а не крах функции).
  */
-const { createClient } = require('@libsql/client');
-
-const url = process.env.TURSO_DATABASE_URL || 'file:screening.db';
+const url = process.env.TURSO_DATABASE_URL;
 const authToken = process.env.TURSO_AUTH_TOKEN;
 
-const client = createClient(
-  authToken ? { url, authToken, intMode: 'number' } : { url, intMode: 'number' }
-);
+let client;
+if (url) {
+  const { createClient } = require('@libsql/client/web');
+  client = createClient({ url, authToken, intMode: 'number' });
+} else {
+  client = { execute: async () => { throw new Error('TURSO_DATABASE_URL не задан'); } };
+}
 
 let ready = null;
 function ensureSchema() {

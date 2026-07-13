@@ -86,9 +86,13 @@ Project → Settings:
 
 ```bash
 npm install
-cp .env.example .env       # можно не заполнять Turso — будет локальный файл screening.db
+cp .env.example .env       # заполните TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, ADMIN_PASSWORD
 npm start                  # http://localhost:3000
 ```
+
+База — облачная (Turso), поэтому для локального запуска тоже нужны `TURSO_*`
+(можно завести отдельную бесплатную dev-базу). Если переменные не заданы,
+страница откроется, но обращения к `/api` вернут ошибку «TURSO_DATABASE_URL не задан».
 
 Кабинет психолога: кнопка на стартовом экране, пароль из `ADMIN_PASSWORD`.
 
