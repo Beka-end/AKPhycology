@@ -9,11 +9,9 @@
 const express = require('express');
 const XLSX = require('xlsx');
 const crypto = require('crypto');
-const path = require('path');
 try { require('dotenv').config(); } catch (_) {}
 const { client, ensureSchema } = require('./db');
-
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const FRONTEND_HTML = require('./frontend'); // страница, встроенная в бандл функции
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'almaty-clinic';
 // Токен стабилен между запусками: берём из env либо детерминированно из пароля
@@ -129,11 +127,9 @@ app.get('/api/export.xlsx', auth, async (_req, res) => {
   } catch (e) { console.error('export error:', e); res.status(500).json({ error: 'export_failed' }); }
 });
 
-// Раздача фронтенда через это же приложение — и локально, и на Vercel.
-// (index.html и статика лежат в public/; на Vercel папка включается в бандл
-//  функции через includeFiles в vercel.json.)
-app.use(express.static(PUBLIC_DIR));
-app.get(/^(?!\/api\/).*/, (_req, res) => res.sendFile(path.join(PUBLIC_DIR, 'index.html')));
+// Раздача фронтенда: страница встроена в код (frontend.js), поэтому работает
+// и локально, и на Vercel без обращения к файловой системе.
+app.get(/^(?!\/api\/).*/, (_req, res) => res.type('html').send(FRONTEND_HTML));
 
 // Локальный запуск: слушаем порт. На Vercel этот блок не выполняется.
 if (require.main === module) {
