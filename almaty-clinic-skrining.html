@@ -680,11 +680,12 @@ const T = {
  us_pass:{ru:"Пароль",kz:"Пароль"}, us_role:{ru:"Роль",kz:"Рөлі"},
  us_role_psy:{ru:"Психолог",kz:"Психолог"}, us_role_admin:{ru:"Админ",kz:"Әкімші"}, us_add:{ru:"Создать учётку",kz:"Тіркелгі жасау"},
  qm_title:{ru:"Вопросы методик",kz:"Әдістеме сұрақтары"},
- qm_lead:{ru:"Просмотр и редактирование вопросов HADS и Бека на двух языках.",kz:"HADS және Бек сұрақтарын екі тілде қарау және өңдеу."},
- qm_lead2:{ru:"Показаны оба языка. Можно добавлять, изменять и удалять вопросы и варианты ответов.",kz:"Екі тіл де көрсетілген. Сұрақтар мен жауап нұсқаларын қосуға, өзгертуге және жоюға болады."},
- qm_open:{ru:"Управление вопросами",kz:"Сұрақтарды басқару"}, qm_eyebrow:{ru:"Методики",kz:"Әдістемелер"},
+ qm_lead:{ru:"Просмотр вопросов и ответов на двух языках (редактирование — у администратора).",kz:"Сұрақтар мен жауаптарды екі тілде қарау (өңдеу — әкімшіде)."},
+ qm_lead2:{ru:"Показаны оба языка (RU / KZ). Редактирование доступно администратору.",kz:"Екі тіл де көрсетілген (RU / KZ). Өңдеу әкімшіге қолжетімді."},
+ qm_open:{ru:"Вопросы и ответы",kz:"Сұрақтар мен жауаптар"}, qm_eyebrow:{ru:"Методики",kz:"Әдістемелер"},
  qm_seed:{ru:"Загрузить стандартные",kz:"Стандарттыларды жүктеу"},
  qm_empty:{ru:"В базе пока нет вопросов. Нажмите «Загрузить стандартные», чтобы перенести встроенные методики в базу для редактирования.",kz:"Базада әзірге сұрақтар жоқ. Өңдеу үшін «Стандарттыларды жүктеу» түймесін басыңыз."},
+ qm_empty_psy:{ru:"Вопросы ещё не загружены администратором.",kz:"Сұрақтарды әкімші әлі жүктемеген."},
  qm_add:{ru:"+ вопрос",kz:"+ сұрақ"}, qm_edit:{ru:"изменить",kz:"өзгерту"},
  qm_del_confirm:{ru:"Удалить этот вопрос?",kz:"Осы сұрақты жою керек пе?"},
  qm_seed_confirm:{ru:"Загрузить стандартные вопросы в базу? (только если база пуста)",kz:"Стандартты сұрақтарды базаға жүктеу керек пе? (тек база бос болса)"},
@@ -1074,7 +1075,7 @@ async function doLogin(){
 async function afterLogin(){
   const isAdmin = userRole==='admin';
   document.getElementById('card-users').style.display = isAdmin ? '' : 'none';
-  document.getElementById('card-questions').style.display = isAdmin ? '' : 'none';
+  document.getElementById('card-questions').style.display = ''; // видят все (психологи — только просмотр)
   document.getElementById('clear-wrap').style.display = isAdmin ? '' : 'none';
   await renderDoctor();
   if(isAdmin) renderUsers();
@@ -1145,31 +1146,34 @@ function escAttr(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;
 async function openQuestions(){ await renderQuestionsAdmin(); go('questions'); }
 
 async function renderQuestionsAdmin(){
+  const isAdmin = userRole==='admin';
   let data=null;
   try{ const res=await fetch(API_BASE+'/api/questions'); if(res.ok) data=await res.json(); }catch(e){}
   const empty = !data || !((data.hads_dep&&data.hads_dep.length)||(data.hads_anx&&data.hads_anx.length)||(data.beck&&data.beck.length));
-  document.getElementById('qm-seed').style.display = empty ? '' : 'none';
+  document.getElementById('qm-seed').style.display = (empty && isAdmin) ? '' : 'none';
   const box=document.getElementById('questions-box');
-  if(empty){ box.innerHTML='<div class="card"><div class="muted">'+T.qm_empty[lang]+'</div></div>'; qmData=null; return; }
+  if(empty){ box.innerHTML='<div class="card"><div class="muted">'+(isAdmin?T.qm_empty[lang]:T.qm_empty_psy[lang])+'</div></div>'; qmData=null; return; }
   qmData=data;
   const scales=[['hads_dep',T.sec_dep[lang]],['hads_anx',T.sec_anx[lang]],['beck',T.beck_stage[lang]]];
   let html='';
   scales.forEach(([sc,title])=>{
     html+='<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'+
       '<h2 style="font-size:16px;margin:0">'+title+'</h2>'+
-      '<button class="btn primary" style="width:auto;flex:none;padding:8px 12px;font-size:13px" onclick="newQuestion(\''+sc+'\')">'+T.qm_add[lang]+'</button></div>';
+      (isAdmin?'<button class="btn primary" style="width:auto;flex:none;padding:8px 12px;font-size:13px" onclick="newQuestion(\''+sc+'\')">'+T.qm_add[lang]+'</button>':'')+'</div>';
     (data[sc]||[]).forEach((q,i)=>{
       const opts=q.options.map(o=>o.score+': '+esc(o.text.ru||o.text.kz||'')).join('  ·  ');
+      const optsKz=q.options.map(o=>o.score+': '+esc(o.text.kz||'')).join('  ·  ');
       html+='<div class="instrow" style="align-items:flex-start">'+
         '<div style="flex:1;min-width:0">'+
           '<div style="font-weight:700;font-size:13px">'+(i+1)+'. '+esc(q.text.ru||(sc==='beck'?'(без текста)':'—'))+'</div>'+
           '<div class="muted" style="font-size:12px">'+esc(q.text.kz||'—')+'</div>'+
-          '<div class="muted" style="font-size:11px;margin-top:3px">'+opts+'</div>'+
+          '<div class="muted" style="font-size:11px;margin-top:3px"><b>RU:</b> '+opts+'</div>'+
+          '<div class="muted" style="font-size:11px"><b>KZ:</b> '+optsKz+'</div>'+
         '</div>'+
-        '<div style="display:flex;gap:2px;flex:none">'+
+        (isAdmin?('<div style="display:flex;gap:2px;flex:none">'+
           '<button class="linkbtn" style="padding:2px 6px" onclick="editQuestion(\''+sc+'\','+i+')">'+T.qm_edit[lang]+'</button>'+
-          '<button class="instdel" onclick="deleteQuestion('+q.id+')">×</button>'+
-        '</div></div>';
+          '<button class="instdel" onclick="deleteQuestion('+q.id+')">×</button></div>'):'')+
+        '</div>';
     });
     html+='</div>';
   });

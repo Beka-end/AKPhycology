@@ -77,9 +77,29 @@ function ensureAdmin() {
   return adminReady;
 }
 
-// Перед API-запросами гарантируем схему и учётку admin. Страницу это не блокирует.
+// Автозагрузка стандартных вопросов в базу, если таблица вопросов пуста
+let questionsReady = null;
+function ensureQuestions() {
+  if (!questionsReady) {
+    questionsReady = (async () => {
+      const cnt = (await client.execute('SELECT COUNT(*) c FROM questions')).rows[0].c;
+      if (cnt > 0) return true;
+      let data = {};
+      try { data = require('./default-questions.json'); } catch (e) { console.error('no default-questions.json'); return true; }
+      for (const scale of ['hads_dep', 'hads_anx', 'beck']) {
+        const items = data[scale] || [];
+        for (let i = 0; i < items.length; i++) await insertQuestion(scale, i, items[i]);
+      }
+      console.log('Стандартные вопросы загружены в базу');
+      return true;
+    })();
+  }
+  return questionsReady;
+}
+
+// Перед API-запросами гарантируем схему, учётку admin и наличие вопросов.
 app.use('/api', async (_req, res, next) => {
-  try { await ensureSchema(); await ensureAdmin(); next(); }
+  try { await ensureSchema(); await ensureAdmin(); await ensureQuestions(); next(); }
   catch (e) { console.error('DB init error:', e); res.status(500).json({ error: 'db_init' }); }
 });
 
