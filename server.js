@@ -49,15 +49,24 @@ app.post('/api/login', (req, res) => {
   res.status(401).json({ error: 'wrong_password' });
 });
 
-// Сохранение результата (студент)
+// Сохранение результата (пациент)
 app.post('/api/records', async (req, res) => {
   try {
     const b = req.body || {};
     if (!/^\d{12}$/.test(String(b.iin || ''))) return res.status(400).json({ error: 'bad_iin' });
-    if (!b.fio || !b.vuz) return res.status(400).json({ error: 'missing_fields' });
+    if (!b.surname || !b.name) return res.status(400).json({ error: 'missing_fields' });
+    const surname = String(b.surname).slice(0, 100);
+    const name = String(b.name).slice(0, 100);
+    const patronymic = b.patronymic ? String(b.patronymic).slice(0, 100) : '';
+    const fio = [surname, name, patronymic].filter(Boolean).join(' ');
     const args = [
       new Date().toISOString(), b.ts || null,
-      String(b.vuz).slice(0, 200), String(b.fio).slice(0, 200), String(b.iin),
+      surname, name, patronymic, fio,
+      b.sex === 'f' || b.sex === 'm' ? b.sex : null,
+      b.age != null ? int(b.age) : null,
+      b.phone ? String(b.phone).slice(0, 40) : null,
+      b.vuz ? String(b.vuz).slice(0, 200) : null,
+      String(b.iin),
       b.lang === 'kz' ? 'kz' : 'ru', int(b.hadsAnx), int(b.hadsDep),
       b.hadsAnxI || null, b.hadsDepI || null, b.stage2 ? 1 : 0,
       b.stage2 ? int(b.beck) : null, b.stage2 ? (b.beckI || null) : null,
@@ -65,13 +74,37 @@ app.post('/api/records', async (req, res) => {
     ];
     const r = await client.execute({
       sql: `INSERT INTO records
-        (created_at,client_ts,vuz,fio,iin,lang,hads_anx,hads_dep,hads_anx_i,hads_dep_i,
-         stage2,beck,beck_i,beck_item9,flag,raw)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        (created_at,client_ts,surname,name,patronymic,fio,sex,age,phone,vuz,iin,lang,
+         hads_anx,hads_dep,hads_anx_i,hads_dep_i,stage2,beck,beck_i,beck_item9,flag,raw)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       args,
     });
     res.json({ ok: true, id: Number(r.lastInsertRowid) });
   } catch (e) { console.error('save error:', e); res.status(500).json({ error: 'save_failed' }); }
+});
+
+// Справочник ВУЗов: список (публичный — для формы), добавление и удаление (психолог)
+app.get('/api/institutions', async (_req, res) => {
+  try {
+    const r = await client.execute('SELECT id, name FROM institutions ORDER BY name COLLATE NOCASE');
+    res.json(r.rows);
+  } catch (e) { console.error('inst list:', e); res.status(500).json({ error: 'inst_list' }); }
+});
+app.post('/api/institutions', auth, async (req, res) => {
+  const name = ((req.body && req.body.name) || '').trim();
+  if (!name) return res.status(400).json({ error: 'empty' });
+  try {
+    await client.execute({ sql: 'INSERT OR IGNORE INTO institutions (name) VALUES (?)', args: [name.slice(0, 200)] });
+    res.json({ ok: true });
+  } catch (e) { console.error('inst add:', e); res.status(500).json({ error: 'inst_add' }); }
+});
+app.delete('/api/institutions', auth, async (req, res) => {
+  const id = req.body && req.body.id;
+  if (!id) return res.status(400).json({ error: 'no_id' });
+  try {
+    await client.execute({ sql: 'DELETE FROM institutions WHERE id = ?', args: [id] });
+    res.json({ ok: true });
+  } catch (e) { console.error('inst del:', e); res.status(500).json({ error: 'inst_del' }); }
 });
 
 // Список записей (психолог)
@@ -105,7 +138,10 @@ app.get('/api/export.xlsx', auth, async (_req, res) => {
     const data = r.rows.map((row, i) => ({
       '№': i + 1,
       'Дата и время': new Date(row.created_at).toLocaleString('ru-RU'),
-      'ВУЗ': row.vuz, 'ФИО': row.fio, 'ИИН': row.iin,
+      'Фамилия': row.surname || '', 'Имя': row.name || '', 'Отчество': row.patronymic || '',
+      'Пол': row.sex === 'f' ? 'жен' : (row.sex === 'm' ? 'муж' : ''),
+      'Возраст': row.age != null ? row.age : '',
+      'Телефон': row.phone || '', 'ИИН': row.iin, 'ВУЗ': row.vuz || '',
       'Язык': row.lang === 'kz' ? 'каз' : 'рус',
       'HADS Тревога (балл)': row.hads_anx, 'HADS Тревога': L(row.hads_anx_i),
       'HADS Депрессия (балл)': row.hads_dep, 'HADS Депрессия': L(row.hads_dep_i),
@@ -115,8 +151,8 @@ app.get('/api/export.xlsx', auth, async (_req, res) => {
       'Требует внимания': row.flag ? 'да' : '',
     }));
     const ws = XLSX.utils.json_to_sheet(data);
-    ws['!cols'] = [{wch:4},{wch:18},{wch:24},{wch:26},{wch:14},{wch:6},{wch:14},{wch:22},
-                   {wch:16},{wch:22},{wch:16},{wch:9},{wch:24},{wch:16},{wch:14}];
+    ws['!cols'] = [{wch:4},{wch:18},{wch:16},{wch:14},{wch:16},{wch:6},{wch:8},{wch:16},{wch:14},{wch:24},{wch:6},
+                   {wch:14},{wch:22},{wch:16},{wch:22},{wch:16},{wch:9},{wch:24},{wch:16},{wch:14}];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Результаты');
     const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
@@ -145,7 +181,10 @@ module.exports = app;
 function int(v) { const n = parseInt(v, 10); return Number.isFinite(n) ? n : 0; }
 function toClient(r) {
   return {
-    id: r.id, ts: r.created_at, vuz: r.vuz, fio: r.fio, iin: r.iin, lang: r.lang,
+    id: r.id, ts: r.created_at,
+    surname: r.surname, name: r.name, patronymic: r.patronymic, fio: r.fio,
+    sex: r.sex, age: r.age, phone: r.phone,
+    vuz: r.vuz, iin: r.iin, lang: r.lang,
     hadsAnx: r.hads_anx, hadsDep: r.hads_dep, hadsAnxI: r.hads_anx_i, hadsDepI: r.hads_dep_i,
     stage2: !!r.stage2, beck: r.stage2 ? r.beck : null, beckI: r.stage2 ? r.beck_i : null,
     beckItem9: r.beck_item9, flag: !!r.flag,
