@@ -55,6 +55,35 @@ function ensureSchema() {
           name TEXT UNIQUE NOT NULL
         )
       `);
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS users (
+          id         INTEGER PRIMARY KEY AUTOINCREMENT,
+          login      TEXT UNIQUE NOT NULL,
+          pass_hash  TEXT NOT NULL,
+          pass_salt  TEXT NOT NULL,
+          role       TEXT NOT NULL DEFAULT 'psy',
+          created_at TEXT
+        )
+      `);
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS questions (
+          id      INTEGER PRIMARY KEY AUTOINCREMENT,
+          scale   TEXT NOT NULL,
+          ord     INTEGER NOT NULL DEFAULT 0,
+          text_ru TEXT,
+          text_kz TEXT
+        )
+      `);
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS options (
+          id          INTEGER PRIMARY KEY AUTOINCREMENT,
+          question_id INTEGER NOT NULL,
+          ord         INTEGER NOT NULL DEFAULT 0,
+          text_ru     TEXT,
+          text_kz     TEXT,
+          score       INTEGER NOT NULL DEFAULT 0
+        )
+      `);
       // Миграции для ранее созданных таблиц (безопасно игнорируем, если колонка есть)
       const cols = ['surname TEXT','name TEXT','patronymic TEXT','fio TEXT',
                     'sex TEXT','age INTEGER','phone TEXT'];
