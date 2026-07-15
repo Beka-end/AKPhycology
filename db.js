@@ -84,6 +84,15 @@ function ensureSchema() {
           score       INTEGER NOT NULL DEFAULT 0
         )
       `);
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS presence (
+          sid        TEXT PRIMARY KEY,
+          updated_at TEXT,
+          activity   TEXT,
+          label      TEXT,
+          lang       TEXT
+        )
+      `);
       // Миграции для ранее созданных таблиц (безопасно игнорируем, если колонка есть)
       const cols = ['surname TEXT','name TEXT','patronymic TEXT','fio TEXT',
                     'sex TEXT','age INTEGER','phone TEXT'];

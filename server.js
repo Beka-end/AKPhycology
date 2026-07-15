@@ -271,7 +271,7 @@ app.get('/api/questions', async (_req, res) => {
 });
 
 // Первичная загрузка стандартных вопросов (только если база пуста)
-app.post('/api/questions/seed', adminOnly, async (req, res) => {
+app.post('/api/questions/seed', auth, async (req, res) => {
   try {
     const cnt = (await client.execute('SELECT COUNT(*) c FROM questions')).rows[0].c;
     if (cnt > 0) return res.json({ ok: true, already: true });
@@ -285,7 +285,7 @@ app.post('/api/questions/seed', adminOnly, async (req, res) => {
   } catch (e) { console.error('q seed:', e); res.status(500).json({ error: 'q_seed' }); }
 });
 
-app.post('/api/questions', adminOnly, async (req, res) => {
+app.post('/api/questions', auth, async (req, res) => {
   const b = req.body || {};
   if (!['hads_dep', 'hads_anx', 'beck'].includes(b.scale)) return res.status(400).json({ error: 'bad_scale' });
   try {
@@ -295,7 +295,7 @@ app.post('/api/questions', adminOnly, async (req, res) => {
   } catch (e) { console.error('q add:', e); res.status(500).json({ error: 'q_add' }); }
 });
 
-app.put('/api/questions', adminOnly, async (req, res) => {
+app.put('/api/questions', auth, async (req, res) => {
   const b = req.body || {};
   if (!b.id) return res.status(400).json({ error: 'no_id' });
   try {
@@ -310,7 +310,7 @@ app.put('/api/questions', adminOnly, async (req, res) => {
   } catch (e) { console.error('q upd:', e); res.status(500).json({ error: 'q_upd' }); }
 });
 
-app.delete('/api/questions', adminOnly, async (req, res) => {
+app.delete('/api/questions', auth, async (req, res) => {
   const id = req.body && req.body.id;
   if (!id) return res.status(400).json({ error: 'no_id' });
   try {
@@ -390,6 +390,58 @@ app.get('/api/export.xlsx', auth, async (_req, res) => {
     res.setHeader('Content-Disposition', `attachment; filename="almaty_clinic_skrining_${stamp}.xlsx"`);
     res.send(buf);
   } catch (e) { console.error('export error:', e); res.status(500).json({ error: 'export_failed' }); }
+});
+
+// Редактирование записи (личные данные) и удаление одной записи
+app.put('/api/records', auth, async (req, res) => {
+  const b = req.body || {};
+  if (!b.id) return res.status(400).json({ error: 'no_id' });
+  if (b.iin != null && b.iin !== '' && !/^\d{12}$/.test(String(b.iin))) return res.status(400).json({ error: 'bad_iin' });
+  try {
+    const surname = String(b.surname || '').slice(0, 100);
+    const name = String(b.name || '').slice(0, 100);
+    const patronymic = String(b.patronymic || '').slice(0, 100);
+    const fio = [surname, name, patronymic].filter(Boolean).join(' ');
+    await client.execute({
+      sql: `UPDATE records SET surname=?, name=?, patronymic=?, fio=?, sex=?, age=?, phone=?, vuz=?, iin=? WHERE id=?`,
+      args: [surname, name, patronymic, fio,
+        (b.sex === 'f' || b.sex === 'm') ? b.sex : null,
+        (b.age != null && b.age !== '') ? int(b.age) : null,
+        b.phone ? String(b.phone).slice(0, 40) : null,
+        b.vuz ? String(b.vuz).slice(0, 200) : null,
+        String(b.iin || ''), b.id],
+    });
+    res.json({ ok: true });
+  } catch (e) { console.error('rec upd:', e); res.status(500).json({ error: 'rec_upd' }); }
+});
+app.delete('/api/records/one', auth, async (req, res) => {
+  const id = req.body && req.body.id;
+  if (!id) return res.status(400).json({ error: 'no_id' });
+  try { await client.execute({ sql: 'DELETE FROM records WHERE id=?', args: [id] }); res.json({ ok: true }); }
+  catch (e) { console.error('rec del:', e); res.status(500).json({ error: 'rec_del' }); }
+});
+
+// Присутствие: тестируемые/сотрудники шлют «пульс», кабинет показывает, кто онлайн
+app.post('/api/presence', async (req, res) => {
+  const b = req.body || {};
+  const sid = String(b.sid || '').slice(0, 64);
+  if (!sid) return res.status(400).json({ error: 'no_sid' });
+  try {
+    await client.execute({
+      sql: `INSERT INTO presence (sid,updated_at,activity,label,lang) VALUES (?,?,?,?,?)
+            ON CONFLICT(sid) DO UPDATE SET updated_at=excluded.updated_at, activity=excluded.activity, label=excluded.label, lang=excluded.lang`,
+      args: [sid, new Date().toISOString(), String(b.activity || '').slice(0, 40), String(b.label || '').slice(0, 120), b.lang === 'kz' ? 'kz' : 'ru'],
+    });
+    res.json({ ok: true });
+  } catch (e) { console.error('presence:', e); res.status(500).json({ error: 'presence' }); }
+});
+app.get('/api/presence', auth, async (_req, res) => {
+  try {
+    const cutoff = new Date(Date.now() - 60000).toISOString(); // онлайн = пульс за последние 60 сек
+    const r = await client.execute({ sql: 'SELECT sid,updated_at,activity,label,lang FROM presence WHERE updated_at>=? ORDER BY updated_at DESC', args: [cutoff] });
+    client.execute({ sql: 'DELETE FROM presence WHERE updated_at < ?', args: [new Date(Date.now() - 3600000).toISOString()] }).catch(() => {});
+    res.json({ now: new Date().toISOString(), sessions: r.rows });
+  } catch (e) { console.error('presence list:', e); res.status(500).json({ error: 'presence_list' }); }
 });
 
 // Раздача фронтенда: страница встроена в код (frontend.js), поэтому работает

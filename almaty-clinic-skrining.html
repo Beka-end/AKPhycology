@@ -385,6 +385,15 @@ td .tag{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px}
       <div style="margin-top:10px" id="clear-wrap"><button class="linkbtn" onclick="clearAll()" data-t="dc_clear">Очистить все записи</button></div>
     </div>
 
+    <div class="card" id="card-presence">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h2 style="font-size:18px;margin:0" data-t="pr_title">Сейчас на сайте</h2>
+        <span class="stagechip"><span id="pr-count">0</span></span>
+      </div>
+      <p class="muted" style="margin:6px 0 0" data-t="pr_lead">Активные за последнюю минуту (тестируемые и сотрудники).</p>
+      <div id="presence-list" style="margin-top:10px"></div>
+    </div>
+
     <div class="card">
       <h2 style="font-size:18px" data-t="ac_title">Смена пароля</h2>
       <div class="field">
@@ -486,6 +495,38 @@ td .tag{font-size:10.5px;font-weight:800;padding:2px 8px;border-radius:99px}
       <div class="btnrow" style="margin-top:14px">
         <button class="btn ghost" onclick="go('questions')" data-t="qe_cancel">Отмена</button>
         <button class="btn primary" onclick="saveQuestion()" data-t="qe_save">Сохранить</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- RECORD EDITOR -->
+  <section id="s-recedit" class="screen">
+    <div class="card">
+      <span class="eyebrow" data-t="re_eyebrow">Запись</span>
+      <h2 data-t="re_title">Редактирование записи</h2>
+      <div class="field"><label data-t="rg_surname">Фамилия</label><input id="re-surname" type="text"></div>
+      <div class="field"><label data-t="rg_name">Имя</label><input id="re-name" type="text"></div>
+      <div class="field"><label data-t="rg_patronymic">Отчество</label><input id="re-patronymic" type="text"></div>
+      <div class="field"><label data-t="rg_sex">Пол</label>
+        <div class="seg">
+          <button type="button" id="re-sex-f" onclick="reSetSex('f')" data-t="rg_sex_f">Женский</button>
+          <button type="button" id="re-sex-m" onclick="reSetSex('m')" data-t="rg_sex_m">Мужской</button>
+        </div>
+      </div>
+      <div class="fieldrow">
+        <div class="field"><label data-t="rg_age">Возраст</label><input id="re-age" type="number" min="1" max="120"></div>
+        <div class="field"><label data-t="rg_phone">Телефон</label><input id="re-phone" type="tel"></div>
+      </div>
+      <div class="field"><label data-t="rg_vuz">ВУЗ</label>
+        <select id="re-vuz"><option value="" data-t="rg_vuz_none">— не указано —</option></select>
+      </div>
+      <div class="field" id="re-f-iin"><label data-t="rg_iin">ИИН</label>
+        <input id="re-iin" type="text" inputmode="numeric" maxlength="12">
+        <div class="err" data-t="rg_iin_err">ИИН должен содержать ровно 12 цифр</div>
+      </div>
+      <div class="btnrow">
+        <button class="btn ghost" onclick="go('doctor')" data-t="qe_cancel">Отмена</button>
+        <button class="btn primary" onclick="saveRecord()" data-t="qe_save">Сохранить</button>
       </div>
     </div>
   </section>
@@ -680,8 +721,8 @@ const T = {
  us_pass:{ru:"Пароль",kz:"Пароль"}, us_role:{ru:"Роль",kz:"Рөлі"},
  us_role_psy:{ru:"Психолог",kz:"Психолог"}, us_role_admin:{ru:"Админ",kz:"Әкімші"}, us_add:{ru:"Создать учётку",kz:"Тіркелгі жасау"},
  qm_title:{ru:"Вопросы методик",kz:"Әдістеме сұрақтары"},
- qm_lead:{ru:"Просмотр вопросов и ответов на двух языках (редактирование — у администратора).",kz:"Сұрақтар мен жауаптарды екі тілде қарау (өңдеу — әкімшіде)."},
- qm_lead2:{ru:"Показаны оба языка (RU / KZ). Редактирование доступно администратору.",kz:"Екі тіл де көрсетілген (RU / KZ). Өңдеу әкімшіге қолжетімді."},
+ qm_lead:{ru:"Просмотр и редактирование вопросов и ответов на двух языках.",kz:"Сұрақтар мен жауаптарды екі тілде қарау және өңдеу."},
+ qm_lead2:{ru:"Показаны оба языка (RU / KZ). Можно добавлять, изменять и удалять вопросы и ответы.",kz:"Екі тіл де көрсетілген (RU / KZ). Сұрақтар мен жауаптарды қосуға, өзгертуге және жоюға болады."},
  qm_open:{ru:"Вопросы и ответы",kz:"Сұрақтар мен жауаптар"}, qm_eyebrow:{ru:"Методики",kz:"Әдістемелер"},
  qm_seed:{ru:"Загрузить стандартные",kz:"Стандарттыларды жүктеу"},
  qm_empty:{ru:"В базе пока нет вопросов. Нажмите «Загрузить стандартные», чтобы перенести встроенные методики в базу для редактирования.",kz:"Базада әзірге сұрақтар жоқ. Өңдеу үшін «Стандарттыларды жүктеу» түймесін басыңыз."},
@@ -698,6 +739,15 @@ const T = {
  qe_cancel:{ru:"Отмена",kz:"Болдырмау"}, qe_save:{ru:"Сохранить",kz:"Сақтау"},
  qe_need_opt:{ru:"Добавьте хотя бы один вариант ответа",kz:"Кемінде бір жауап нұсқасын қосыңыз"},
  qe_save_err:{ru:"Не удалось сохранить",kz:"Сақтау сәтсіз аяқталды"},
+ rec_edit:{ru:"изменить",kz:"өзгерту"},
+ rec_del_confirm:{ru:"Удалить эту запись?",kz:"Осы жазбаны жою керек пе?"},
+ re_eyebrow:{ru:"Запись",kz:"Жазба"}, re_title:{ru:"Редактирование записи",kz:"Жазбаны өңдеу"},
+ pr_title:{ru:"Сейчас на сайте",kz:"Қазір сайтта"},
+ pr_lead:{ru:"Активные за последнюю минуту (тестируемые и сотрудники).",kz:"Соңғы минут ішінде белсенді (тестілеушілер мен қызметкерлер)."},
+ pr_empty:{ru:"Сейчас никого нет.",kz:"Қазір ешкім жоқ."}, pr_anon:{ru:"аноним",kz:"аноним"}, pr_sec:{ru:"сек назад",kz:"сек бұрын"},
+ act_welcome:{ru:"на главной",kz:"басты бетте"}, act_register:{ru:"регистрация",kz:"тіркелу"},
+ act_hads:{ru:"проходит HADS",kz:"HADS өтуде"}, act_beck:{ru:"проходит Бек",kz:"Бек өтуде"},
+ act_result:{ru:"результат",kz:"нәтиже"}, act_cabinet:{ru:"кабинет",kz:"кабинет"},
  confirm_clear:{ru:"Удалить все сохранённые результаты? Действие необратимо.",kz:"Барлық сақталған нәтижені жою керек пе? Әрекет қайтарылмайды."},
  ih_num:{ru:"Этап 1 из 2",kz:"1-кезең / 2"}, ih_btn:{ru:"Начать",kz:"Бастау"},
  ih_title:{ru:"Шкала тревоги и депрессии (HADS)",kz:"Мазасыздық және депрессия шкаласы (HADS)"},
@@ -794,6 +844,7 @@ function go(name){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('s-'+name).classList.add('active');
   window.scrollTo({top:0,behavior:'instant'});
+  if(typeof sendPresence==='function') sendPresence();
 }
 
 /* ================= РЕГИСТРАЦИЯ ================= */
@@ -1079,6 +1130,7 @@ async function afterLogin(){
   document.getElementById('clear-wrap').style.display = isAdmin ? '' : 'none';
   await renderDoctor();
   if(isAdmin) renderUsers();
+  startPresenceRefresh();
   go('doctor'); makeQR();
 }
 function logout(){ adminToken=null; userRole=null; userLogin=null; apiOnline=false; go('welcome'); }
@@ -1146,7 +1198,7 @@ function escAttr(s){ return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;
 async function openQuestions(){ await renderQuestionsAdmin(); go('questions'); }
 
 async function renderQuestionsAdmin(){
-  const isAdmin = userRole==='admin';
+  const isAdmin = true; // управление вопросами доступно всем вошедшим (психологам тоже)
   let data=null;
   try{ const res=await fetch(API_BASE+'/api/questions'); if(res.ok) data=await res.json(); }catch(e){}
   const empty = !data || !((data.hads_dep&&data.hads_dep.length)||(data.hads_anx&&data.hads_anx.length)||(data.beck&&data.beck.length));
@@ -1222,10 +1274,19 @@ function renderOptRows(){
     });
   });
 }
-function qeAddOption(){ qEdit.options.push({text:{ru:'',kz:''},score:qEdit.options.length}); renderOptRows(); }
-function qeDelOption(i){ qEdit.options.splice(i,1); renderOptRows(); }
+function syncOptionsFromDOM(){
+  const box=document.getElementById('qe-options');
+  box.querySelectorAll('input').forEach(inp=>{
+    const i=+inp.dataset.oi, f=inp.dataset.of; if(!qEdit.options[i]) return;
+    if(f==='score') qEdit.options[i].score=parseInt(inp.value,10)||0;
+    else qEdit.options[i].text[f]=inp.value;
+  });
+}
+function qeAddOption(){ syncOptionsFromDOM(); qEdit.options.push({text:{ru:'',kz:''},score:qEdit.options.length}); renderOptRows(); }
+function qeDelOption(i){ syncOptionsFromDOM(); qEdit.options.splice(i,1); renderOptRows(); }
 
 async function saveQuestion(){
+  syncOptionsFromDOM();
   qEdit.text.ru=document.getElementById('qe-text-ru').value.trim();
   qEdit.text.kz=document.getElementById('qe-text-kz').value.trim();
   if(!qEdit.options.length){ alert(T.qe_need_opt[lang]); return; }
@@ -1254,6 +1315,97 @@ async function seedQuestions(){
     await loadQuestions(); await renderQuestionsAdmin();
   }catch(e){ alert(lang==='kz'?'Желі қатесі':'Ошибка сети'); }
 }
+
+/* ================= РЕДАКТИРОВАНИЕ / УДАЛЕНИЕ ЗАПИСЕЙ ================= */
+let recEditId=null, recEditSex=null;
+function reSetSex(s){ recEditSex=s;
+  document.getElementById('re-sex-f').classList.toggle('on',s==='f');
+  document.getElementById('re-sex-m').classList.toggle('on',s==='m');
+}
+async function editRecord(id){
+  const r=records.find(x=>x.id===id); if(!r) return;
+  recEditId=id;
+  document.getElementById('re-surname').value=r.surname||'';
+  document.getElementById('re-name').value=r.name||'';
+  document.getElementById('re-patronymic').value=r.patronymic||'';
+  document.getElementById('re-age').value=r.age!=null?r.age:'';
+  document.getElementById('re-phone').value=r.phone||'';
+  document.getElementById('re-iin').value=r.iin||'';
+  document.getElementById('re-f-iin').classList.remove('bad');
+  reSetSex(r.sex||null);
+  const sel=document.getElementById('re-vuz');
+  sel.innerHTML='<option value="">'+T.rg_vuz_none[lang]+'</option>';
+  try{ const list=await apiInstitutions(); list.forEach(x=>{ const o=document.createElement('option'); o.value=x.name; o.textContent=x.name; sel.appendChild(o); }); }catch(e){}
+  sel.value=r.vuz||'';
+  go('recedit');
+}
+async function saveRecord(){
+  const iin=document.getElementById('re-iin').value.trim();
+  if(iin && !/^\d{12}$/.test(iin)){ document.getElementById('re-f-iin').classList.add('bad'); return; }
+  if(!adminToken){ alert(lang==='kz'?'Демо режимінде қолжетімсіз':'В демо-режиме недоступно'); return; }
+  const body={ id:recEditId,
+    surname:document.getElementById('re-surname').value.trim(),
+    name:document.getElementById('re-name').value.trim(),
+    patronymic:document.getElementById('re-patronymic').value.trim(),
+    sex:recEditSex, age:document.getElementById('re-age').value.trim(),
+    phone:document.getElementById('re-phone').value.trim(),
+    vuz:document.getElementById('re-vuz').value, iin };
+  try{
+    const res=await fetch(API_BASE+'/api/records',{method:'PUT',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+adminToken},body:JSON.stringify(body)});
+    if(!res.ok){ alert(T.qe_save_err[lang]); return; }
+    await renderDoctor(); go('doctor');
+  }catch(e){ alert(lang==='kz'?'Желі қатесі':'Ошибка сети'); }
+}
+async function deleteRecord(id){
+  if(!confirm(T.rec_del_confirm[lang])) return;
+  if(!adminToken){ alert(lang==='kz'?'Демо режимінде қолжетімсіз':'В демо-режиме недоступно'); return; }
+  try{ await fetch(API_BASE+'/api/records/one',{method:'DELETE',
+    headers:{'Content-Type':'application/json',Authorization:'Bearer '+adminToken},body:JSON.stringify({id})});
+    await renderDoctor(); }catch(e){}
+}
+
+/* ================= ПРИСУТСТВИЕ (кто на сайте) ================= */
+const SID = 'sid-'+Math.random().toString(36).slice(2)+Date.now().toString(36);
+let presenceTimer=null, presenceRefresh=null;
+
+function currentActivity(){
+  const active=document.querySelector('.screen.active');
+  const id=active?active.id.replace('s-',''):'welcome';
+  if(id==='test') return phase==='beck'?'beck':'hads';
+  if(id==='intro-hads') return 'hads';
+  if(id==='intro-beck') return 'beck';
+  if(['login','doctor','questions','qedit','recedit','qr'].indexOf(id)>=0) return 'cabinet';
+  if(id==='register'||id==='consent') return 'register';
+  if(id==='result') return 'result';
+  return 'welcome';
+}
+async function sendPresence(){
+  const label = session&&session.surname ? (session.surname+' '+(session.name||'')).trim() : '';
+  try{ await fetch(API_BASE+'/api/presence',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({sid:SID, activity:currentActivity(), label, lang})}); }catch(e){}
+}
+function startPresence(){ sendPresence(); if(!presenceTimer) presenceTimer=setInterval(sendPresence,20000); }
+
+async function renderPresence(){
+  const box=document.getElementById('presence-list'); if(!box||!adminToken) return;
+  try{
+    const res=await fetch(API_BASE+'/api/presence',{headers:{Authorization:'Bearer '+adminToken}});
+    if(!res.ok) throw 0;
+    const j=await res.json(); const now=new Date(j.now).getTime();
+    document.getElementById('pr-count').textContent=j.sessions.length;
+    if(!j.sessions.length){ box.innerHTML='<div class="muted">'+T.pr_empty[lang]+'</div>'; return; }
+    box.innerHTML=j.sessions.map(s=>{
+      const ago=Math.max(0,Math.round((now-new Date(s.updated_at).getTime())/1000));
+      const act=T['act_'+s.activity]?T['act_'+s.activity][lang]:s.activity;
+      const who=s.label?esc(s.label):('<span class="muted">'+T.pr_anon[lang]+'</span>');
+      return '<div class="instrow"><span>'+who+' · '+act+' · '+(s.lang==='kz'?'ҚАЗ':'РУС')+'</span>'+
+        '<span class="muted" style="font-size:12px">'+ago+' '+T.pr_sec[lang]+'</span></div>';
+    }).join('');
+  }catch(e){ box.innerHTML='<div class="muted">—</div>'; }
+}
+function startPresenceRefresh(){ renderPresence(); if(!presenceRefresh) presenceRefresh=setInterval(()=>{ if(document.getElementById('s-doctor').classList.contains('active')) renderPresence(); },15000); }
 async function renderDoctor(){
   // В серверном режиме тянем записи из базы, иначе — локальный кэш
   if(adminToken){ try{ records=await apiList(); apiOnline=true; }catch(e){ loadRecords(); } }
@@ -1277,10 +1429,13 @@ async function renderDoctor(){
     const tag = r.flag? '<span class="tag" style="background:#f7e0da;color:var(--clay)">!</span>' : '<span class="tag" style="background:#dcefe6;color:var(--calm)">ok</span>';
     rows+='<tr><td>'+tag+'</td><td>'+dt+'</td><td>'+esc(r.fio||'')+'</td><td>'+sex+'</td><td>'+(r.age!=null?r.age:'—')+'</td>'+
       '<td>'+esc(r.phone||'—')+'</td><td>'+esc(r.vuz||'—')+'</td><td>'+r.iin+'</td>'+
-      '<td>'+r.hadsAnx+'</td><td>'+r.hadsDep+'</td><td>'+(r.stage2?'✓':'—')+'</td><td>'+beckCell+'</td></tr>';
+      '<td>'+r.hadsAnx+'</td><td>'+r.hadsDep+'</td><td>'+(r.stage2?'✓':'—')+'</td><td>'+beckCell+'</td>'+
+      '<td style="white-space:nowrap">'+(adminToken?(
+        '<button class="linkbtn" style="padding:2px 6px" onclick="editRecord('+r.id+')">'+T.rec_edit[lang]+'</button>'+
+        '<button class="instdel" onclick="deleteRecord('+r.id+')">×</button>'):'—')+'</td></tr>';
   });
   box.innerHTML='<div class="tablewrap"><table><thead><tr>'+
-    '<th>·</th><th>Дата</th><th>ФИО</th><th>Пол</th><th>Возр.</th><th>Телефон</th><th>ВУЗ</th><th>ИИН</th><th>HADS-Т</th><th>HADS-Д</th><th>2 эт.</th><th>Бек</th>'+
+    '<th>·</th><th>Дата</th><th>ФИО</th><th>Пол</th><th>Возр.</th><th>Телефон</th><th>ВУЗ</th><th>ИИН</th><th>HADS-Т</th><th>HADS-Д</th><th>2 эт.</th><th>Бек</th><th></th>'+
     '</tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
 
@@ -1370,6 +1525,7 @@ async function exportExcel(){
 /* ================= ИНИЦИАЛИЗАЦИЯ ================= */
 loadRecords();
 loadQuestions();
+startPresence();
 setLang('ru');
 // вход через QR: поддержка ?lang=kz
 const p=new URLSearchParams(location.search);
