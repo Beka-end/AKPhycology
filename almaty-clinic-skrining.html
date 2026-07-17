@@ -671,7 +671,7 @@ const T = {
  wl_showqr:{ru:"Показать QR для входа",kz:"Кіру үшін QR көрсету"},
  qr_eyebrow:{ru:"Вход по QR",kz:"QR арқылы кіру"},
  qr_title:{ru:"Наведите камеру телефона на код",kz:"Телефон камерасын кодқа бағыттаңыз"},
- qr_lead:{ru:"Код ведёт на адрес этого приложения. Покажите его студентам (на экране или распечатайте) — они сканируют камерой и попадают на тест.",kz:"Код осы қосымшаның мекенжайына апарады. Оны студенттерге көрсетіңіз (экранда немесе басып шығарыңыз) — олар камерамен сканерлеп, тестке өтеді."},
+ qr_lead:{ru:"Отсканируйте QR-код и пройдите тестирование",kz:"QR-кодты сканерлеп, тесттен өтіңіз"},
  wl_foot:{ru:"Инструмент скрининга. Не является клиническим диагнозом — интерпретирует специалист.",kz:"Скрининг құралы. Клиникалық диагноз емес — маман түсіндіреді."},
  rg_eyebrow:{ru:"Идентификация",kz:"Сәйкестендіру"}, rg_title:{ru:"Ваши данные",kz:"Сіздің деректеріңіз"},
  rg_lead:{ru:"Данные нужны психологу для обратной связи. Заполните все поля.",kz:"Деректер психологқа кері байланыс үшін қажет. Барлық өрісті толтырыңыз."},
@@ -741,6 +741,11 @@ const T = {
  qe_save_err:{ru:"Не удалось сохранить",kz:"Сақтау сәтсіз аяқталды"},
  rec_edit:{ru:"изменить",kz:"өзгерту"},
  rec_del_confirm:{ru:"Удалить эту запись?",kz:"Осы жазбаны жою керек пе?"},
+ rec_search:{ru:"Поиск",kz:"Іздеу"}, rec_search_ph:{ru:"ФИО, ИИН или телефон",kz:"Т.А.Ә., ЖСН немесе телефон"},
+ rec_from:{ru:"С даты",kz:"Күннен"}, rec_to:{ru:"По дату",kz:"Күнге дейін"},
+ rec_find:{ru:"Найти",kz:"Табу"}, rec_reset:{ru:"Сброс",kz:"Тазалау"},
+ rec_none:{ru:"Ничего не найдено.",kz:"Ештеңе табылмады."},
+ rec_prev:{ru:"Назад",kz:"Артқа"}, rec_next:{ru:"Вперёд",kz:"Алға"}, rec_page:{ru:"стр.",kz:"бет"},
  re_eyebrow:{ru:"Запись",kz:"Жазба"}, re_title:{ru:"Редактирование записи",kz:"Жазбаны өңдеу"},
  pr_title:{ru:"Сейчас на сайте",kz:"Қазір сайтта"},
  pr_lead:{ru:"Активные за последнюю минуту (тестируемые и сотрудники).",kz:"Соңғы минут ішінде белсенді (тестілеушілер мен қызметкерлер)."},
@@ -802,6 +807,18 @@ async function apiLogin(login,password){
 async function apiList(){
   const res=await fetch(API_BASE+'/api/records',{headers:{Authorization:'Bearer '+adminToken}});
   if(!res.ok) throw new Error('list failed');
+  return await res.json();
+}
+async function apiListPage(){
+  const p=new URLSearchParams({limit:String(recLimit), offset:String(recPage*recLimit)});
+  if(recQuery) p.set('q',recQuery); if(recFrom) p.set('from',recFrom); if(recTo) p.set('to',recTo);
+  const res=await fetch(API_BASE+'/api/records?'+p.toString(),{headers:{Authorization:'Bearer '+adminToken}});
+  if(!res.ok) throw new Error('list failed');
+  return await res.json();
+}
+async function apiStats(){
+  const res=await fetch(API_BASE+'/api/records/stats',{headers:{Authorization:'Bearer '+adminToken}});
+  if(!res.ok) throw new Error('stats failed');
   return await res.json();
 }
 async function apiClear(){
@@ -1386,7 +1403,7 @@ async function sendPresence(){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({sid:SID, activity:currentActivity(), label, lang})}); }catch(e){}
 }
-function startPresence(){ sendPresence(); if(!presenceTimer) presenceTimer=setInterval(sendPresence,20000); }
+function startPresence(){ sendPresence(); if(!presenceTimer) presenceTimer=setInterval(sendPresence,45000); }
 
 async function renderPresence(){
   const box=document.getElementById('presence-list'); if(!box||!adminToken) return;
@@ -1406,38 +1423,86 @@ async function renderPresence(){
   }catch(e){ box.innerHTML='<div class="muted">—</div>'; }
 }
 function startPresenceRefresh(){ renderPresence(); if(!presenceRefresh) presenceRefresh=setInterval(()=>{ if(document.getElementById('s-doctor').classList.contains('active')) renderPresence(); },15000); }
+let recPage=0, recLimit=50, recQuery='', recFrom='', recTo='';
+
 async function renderDoctor(){
-  // В серверном режиме тянем записи из базы, иначе — локальный кэш
-  if(adminToken){ try{ records=await apiList(); apiOnline=true; }catch(e){ loadRecords(); } }
-  else { loadRecords(); }
-  const total=records.length;
-  const s2=records.filter(r=>r.stage2).length;
-  const fl=records.filter(r=>r.flag).length;
+  // Статистика (общие счётчики) — отдельно от постраничного списка
+  let total=0,s2=0,fl=0;
+  if(adminToken){
+    try{ const st=await apiStats(); apiOnline=true; total=st.total; s2=st.stage2; fl=st.flagged; }catch(e){}
+  } else {
+    loadRecords(); total=records.length; s2=records.filter(r=>r.stage2).length; fl=records.filter(r=>r.flag).length;
+  }
   document.getElementById('st-total').textContent=total;
   document.getElementById('st-stage2').textContent=s2;
   document.getElementById('st-flag').textContent=fl;
   renderInstitutions();
-
-  const box=document.getElementById('doc-table');
-  if(!total){ box.innerHTML='<div class="empty">'+T.dc_empty[lang]+'</div>'; return; }
-  let rows='';
-  records.slice().reverse().forEach(r=>{
-    const d=new Date(r.ts);
-    const dt=d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
-    const beckCell = r.stage2 ? (r.beck+' · '+I[r.beckI][lang]) : '—';
-    const sex = r.sex==='f'?'жен':(r.sex==='m'?'муж':'—');
-    const tag = r.flag? '<span class="tag" style="background:#f7e0da;color:var(--clay)">!</span>' : '<span class="tag" style="background:#dcefe6;color:var(--calm)">ok</span>';
-    rows+='<tr><td>'+tag+'</td><td>'+dt+'</td><td>'+esc(r.fio||'')+'</td><td>'+sex+'</td><td>'+(r.age!=null?r.age:'—')+'</td>'+
-      '<td>'+esc(r.phone||'—')+'</td><td>'+esc(r.vuz||'—')+'</td><td>'+r.iin+'</td>'+
-      '<td>'+r.hadsAnx+'</td><td>'+r.hadsDep+'</td><td>'+(r.stage2?'✓':'—')+'</td><td>'+beckCell+'</td>'+
-      '<td style="white-space:nowrap">'+(adminToken?(
-        '<button class="linkbtn" style="padding:2px 6px" onclick="editRecord('+r.id+')">'+T.rec_edit[lang]+'</button>'+
-        '<button class="instdel" onclick="deleteRecord('+r.id+')">×</button>'):'—')+'</td></tr>';
-  });
-  box.innerHTML='<div class="tablewrap"><table><thead><tr>'+
-    '<th>·</th><th>Дата</th><th>ФИО</th><th>Пол</th><th>Возр.</th><th>Телефон</th><th>ВУЗ</th><th>ИИН</th><th>HADS-Т</th><th>HADS-Д</th><th>2 эт.</th><th>Бек</th><th></th>'+
-    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+  await renderRecords();
 }
+
+function filterLocalRecords(){
+  let list=records.slice().reverse();
+  if(recQuery){ const qq=recQuery.toLowerCase(); list=list.filter(r=>((r.fio||'')+(r.iin||'')+(r.phone||'')).toLowerCase().indexOf(qq)>=0); }
+  if(recFrom){ list=list.filter(r=> (r.ts||'')>=recFrom); }
+  if(recTo){ list=list.filter(r=> (r.ts||'')<=recTo+'T23:59:59.999Z'); }
+  const start=recPage*recLimit;
+  return list.slice(start,start+recLimit);
+}
+
+async function renderRecords(){
+  const box=document.getElementById('doc-table');
+  let pageRows=[];
+  if(adminToken){ try{ pageRows=await apiListPage(); apiOnline=true; }catch(e){ pageRows=[]; } }
+  else { loadRecords(); pageRows=filterLocalRecords(); }
+  records=pageRows; // текущая страница (для правки/удаления)
+
+  const hasFilter = !!(recQuery||recFrom||recTo);
+  let html='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px">'+
+    '<div class="field" style="margin:0;flex:1;min-width:150px"><label style="font-size:11px">'+T.rec_search[lang]+'</label>'+
+      '<input id="rec-q" value="'+escAttr(recQuery)+'" placeholder="'+escAttr(T.rec_search_ph[lang])+'"></div>'+
+    '<div class="field" style="margin:0"><label style="font-size:11px">'+T.rec_from[lang]+'</label><input id="rec-from" type="date" value="'+recFrom+'"></div>'+
+    '<div class="field" style="margin:0"><label style="font-size:11px">'+T.rec_to[lang]+'</label><input id="rec-to" type="date" value="'+recTo+'"></div>'+
+    '<button class="btn primary" style="width:auto;flex:none" onclick="applyRecFilter()">'+T.rec_find[lang]+'</button>'+
+    (hasFilter?'<button class="btn ghost" style="width:auto;flex:none" onclick="resetRecFilter()">'+T.rec_reset[lang]+'</button>':'')+
+  '</div>';
+
+  if(!pageRows.length){
+    html+='<div class="empty">'+(hasFilter?T.rec_none[lang]:T.dc_empty[lang])+'</div>';
+  } else {
+    let rows='';
+    pageRows.forEach(r=>{
+      const d=new Date(r.ts);
+      const dt=d.toLocaleDateString('ru-RU')+' '+d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+      const beckCell = r.stage2 ? (r.beck+' · '+I[r.beckI][lang]) : '—';
+      const sex = r.sex==='f'?'жен':(r.sex==='m'?'муж':'—');
+      const tag = r.flag? '<span class="tag" style="background:#f7e0da;color:var(--clay)">!</span>' : '<span class="tag" style="background:#dcefe6;color:var(--calm)">ok</span>';
+      rows+='<tr><td>'+tag+'</td><td>'+dt+'</td><td>'+esc(r.fio||'')+'</td><td>'+sex+'</td><td>'+(r.age!=null?r.age:'—')+'</td>'+
+        '<td>'+esc(r.phone||'—')+'</td><td>'+esc(r.vuz||'—')+'</td><td>'+r.iin+'</td>'+
+        '<td>'+r.hadsAnx+'</td><td>'+r.hadsDep+'</td><td>'+(r.stage2?'✓':'—')+'</td><td>'+beckCell+'</td>'+
+        '<td style="white-space:nowrap">'+(adminToken?(
+          '<button class="linkbtn" style="padding:2px 6px" onclick="editRecord('+r.id+')">'+T.rec_edit[lang]+'</button>'+
+          '<button class="instdel" onclick="deleteRecord('+r.id+')">×</button>'):'—')+'</td></tr>';
+    });
+    html+='<div class="tablewrap"><table><thead><tr>'+
+      '<th>·</th><th>Дата</th><th>ФИО</th><th>Пол</th><th>Возр.</th><th>Телефон</th><th>ВУЗ</th><th>ИИН</th><th>HADS-Т</th><th>HADS-Д</th><th>2 эт.</th><th>Бек</th><th></th>'+
+      '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+    html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">'+
+      '<button class="btn ghost" style="width:auto" '+(recPage<=0?'disabled':'')+' onclick="recPrev()">← '+T.rec_prev[lang]+'</button>'+
+      '<span class="muted">'+T.rec_page[lang]+' '+(recPage+1)+'</span>'+
+      '<button class="btn ghost" style="width:auto" '+(pageRows.length<recLimit?'disabled':'')+' onclick="recNext()">'+T.rec_next[lang]+' →</button>'+
+    '</div>';
+  }
+  box.innerHTML=html;
+}
+function applyRecFilter(){
+  recQuery=(document.getElementById('rec-q').value||'').trim();
+  recFrom=document.getElementById('rec-from').value||'';
+  recTo=document.getElementById('rec-to').value||'';
+  recPage=0; renderRecords();
+}
+function resetRecFilter(){ recQuery=''; recFrom=''; recTo=''; recPage=0; renderRecords(); }
+function recPrev(){ if(recPage>0){ recPage--; renderRecords(); } }
+function recNext(){ recPage++; renderRecords(); }
 
 /* --- Справочник ВУЗов --- */
 let institutions=[];

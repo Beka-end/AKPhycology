@@ -1,30 +1,12 @@
-# Зависимости
-node_modules/
+root = true
 
-# Секреты и окружение
-.env
-.env.local
-.env.*.local
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
 
-# База данных и её служебные файлы / бэкапы
-*.db
-*.db-journal
-*.db-wal
-*.db-shm
-screening.db*
-backups/
-
-# Логи
-*.log
-npm-debug.log*
-
-# ОС и редакторы
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-*.swp
-
-# Прочее
-dist/
-tmp/
+[*.md]
+trim_trailing_whitespace = false

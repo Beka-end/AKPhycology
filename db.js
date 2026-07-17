@@ -93,6 +93,13 @@ function ensureSchema() {
           lang       TEXT
         )
       `);
+      // Индексы (ускоряют выборки и снижают число сканируемых строк)
+      await client.execute('CREATE INDEX IF NOT EXISTS idx_records_created ON records(created_at)');
+      await client.execute('CREATE INDEX IF NOT EXISTS idx_records_iin ON records(iin)');
+      await client.execute('CREATE INDEX IF NOT EXISTS idx_records_flags ON records(stage2, flag)');
+      await client.execute('CREATE INDEX IF NOT EXISTS idx_presence_updated ON presence(updated_at)');
+      await client.execute('CREATE INDEX IF NOT EXISTS idx_options_qid ON options(question_id)');
+      await client.execute('CREATE INDEX IF NOT EXISTS idx_questions_scale ON questions(scale, ord)');
       // Миграции для ранее созданных таблиц (безопасно игнорируем, если колонка есть)
       const cols = ['surname TEXT','name TEXT','patronymic TEXT','fio TEXT',
                     'sex TEXT','age INTEGER','phone TEXT'];

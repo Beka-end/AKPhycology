@@ -320,10 +320,20 @@ app.delete('/api/questions', auth, async (req, res) => {
   } catch (e) { console.error('q del:', e); res.status(500).json({ error: 'q_del' }); }
 });
 
-// Список записей (психолог)
-app.get('/api/records', auth, async (_req, res) => {
+// Список записей (психолог) — с пагинацией, поиском и фильтром по дате
+app.get('/api/records', auth, async (req, res) => {
   try {
-    const r = await client.execute('SELECT * FROM records ORDER BY id DESC');
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit, 10) || 50));
+    const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+    const q = (req.query.q || '').trim();
+    const from = (req.query.from || '').trim();
+    const to = (req.query.to || '').trim();
+    const where = [], args = [];
+    if (q) { where.push('(fio LIKE ? OR iin LIKE ? OR phone LIKE ?)'); const like = '%' + q + '%'; args.push(like, like, like); }
+    if (from) { where.push('created_at >= ?'); args.push(from); }
+    if (to) { where.push('created_at <= ?'); args.push(to + 'T23:59:59.999Z'); }
+    const wsql = where.length ? (' WHERE ' + where.join(' AND ')) : '';
+    const r = await client.execute({ sql: 'SELECT * FROM records' + wsql + ' ORDER BY id DESC LIMIT ? OFFSET ?', args: [...args, limit, offset] });
     res.json(r.rows.map(toClient));
   } catch (e) { console.error('list error:', e); res.status(500).json({ error: 'list_failed' }); }
 });
